@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- Ensure Referrer is sent to Google API -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   
   <!-- PRODUCTION METADATA -->
   <title>Fate Casket · Universal Zen Observatory</title>
@@ -559,16 +561,29 @@
       if(!container) return;
       
       const t = document.createElement("div");
-      t.className = "fade-in bg-[#15151a] border border-gold/30 text-gray-300 px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md pointer-events-auto";
-      t.innerHTML = `<span class="text-gold text-lg">✦</span> <span>${msg}</span>`;
+      // Added max-w-xs to prevent super long error messages from looking weird
+      t.className = "fade-in bg-[#15151a] border border-gold/30 text-gray-300 px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md pointer-events-auto max-w-xs text-left";
+      
+      // Color coding for error/success
+      let icon = "✦";
+      if(type === "error") { 
+          icon = "⚠️"; 
+          t.style.borderColor = "rgba(255,100,100,0.3)"; 
+          t.classList.add("text-red-200");
+      }
+      
+      t.innerHTML = `<span class="text-gold text-lg">${icon}</span> <span>${msg}</span>`;
       
       container.appendChild(t);
+      // Increased timeout for errors so user can read them
+      const duration = type === "error" ? 6000 : 3000;
+      
       setTimeout(() => { 
         t.style.opacity = "0"; 
         t.style.transform = "translateY(10px)";
         t.style.transition = "all 0.5s ease";
         setTimeout(() => t.remove(), 500); 
-      }, 3000);
+      }, duration);
     }
 
     // --- DATA ---
@@ -1061,7 +1076,8 @@
         const data = await response.json();
         
         if (data.error) {
-           throw new Error(data.error.message);
+           // Pass the specific error from Google to the catch block
+           throw new Error(data.error.message || "API Error");
         }
 
         if(data.predictions && data.predictions[0]) {
@@ -1078,15 +1094,23 @@
         }
       } catch(e) {
         console.error("Art Generation Error:", e);
-        // Better error messaging
+        
         let msg = "Generation failed.";
-        if(e.message && e.message.includes("Failed to fetch")) {
-            msg = "Network error (CORS/Internet). Try a local server.";
-        } else if(e.message && (e.message.includes("400") || e.message.includes("API key"))) {
-            msg = "Invalid API Key or Bad Request.";
-        } else {
-            msg = e.message || "Unknown Error"; // Show the raw message from Google
+        
+        // Intelligent Error Parsing
+        if (e.message) {
+            if (e.message.includes("403") || e.message.includes("referrer")) {
+                msg = "Key Error: Check Google Console Website Restrictions (Did you forget the wildcards? e.g. .io/*)";
+            } else if (e.message.includes("400") || e.message.includes("API key")) {
+                msg = "Invalid API Key or Bad Request.";
+            } else if (e.message.includes("Failed to fetch")) {
+                msg = "Network Blocked. (Are you using an AdBlocker or strict Firewall?)";
+            } else {
+                // Show the raw Google message which is usually helpful
+                msg = `API Error: ${e.message}`; 
+            }
         }
+        
         toast(msg, "error");
       } finally {
         btn.disabled = false;
