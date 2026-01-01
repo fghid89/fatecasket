@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <!-- Ensure Referrer is sent to Google API -->
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  
+  <!-- FIX: Send full URL path in Referrer header to satisfy Google Cloud restrictions -->
+  <meta name="referrer" content="no-referrer-when-downgrade" />
   
   <!-- PRODUCTION METADATA -->
   <title>Fate Casket · Universal Zen Observatory</title>
@@ -545,15 +546,28 @@
         </div>
       </div>
 
-      <button onclick="location.reload()" class="block mx-auto py-4 px-8 text-gray-600 hover:text-gold transition-colors duration-500 text-[10px] tracking-[0.5em] uppercase border-b border-transparent hover:border-gold/30">
-        Empty Cup · Begin Again
-      </button>
+      <div class="flex items-center justify-center gap-6 pb-8">
+        <button onclick="updateKey()" class="text-gray-700 hover:text-gray-500 text-[9px] uppercase tracking-widest transition">
+          API Key
+        </button>
+        <button onclick="location.reload()" class="py-4 px-8 text-gray-600 hover:text-gold transition-colors duration-500 text-[10px] tracking-[0.5em] uppercase border-b border-transparent hover:border-gold/30">
+          Empty Cup · Begin Again
+        </button>
+      </div>
 
     </section>
   </div>
 
   <script>
-    const apiKey = "AIzaSyD8TQgJkhppAkZs38vYiwse2Teuoz5Zjdw"; // Optional: Paste your API key here, or leave empty to be prompted at runtime.
+    let apiKey = "AIzaSyD8TQgJkhppAkZs38vYiwse2Teuoz5Zjdw"; // Optional: Paste your API key here, or leave empty to be prompted at runtime.
+    
+    function updateKey() {
+        const newKey = prompt("Enter new Google API Key:", apiKey);
+        if(newKey && newKey.trim() !== "") {
+            apiKey = newKey.trim();
+            toast("Key updated for this session.", "gold");
+        }
+    }
 
     // --- UTILITIES ---
     function toast(msg, type="neutral") {
@@ -562,7 +576,7 @@
       
       const t = document.createElement("div");
       // Added max-w-xs to prevent super long error messages from looking weird
-      t.className = "fade-in bg-[#15151a] border border-gold/30 text-gray-300 px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md pointer-events-auto max-w-xs text-left";
+      t.className = "fade-in bg-[#15151a] border border-gold/30 text-gray-300 px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-3 backdrop-blur-md pointer-events-auto max-w-sm text-left break-words";
       
       // Color coding for error/success
       let icon = "✦";
@@ -576,7 +590,7 @@
       
       container.appendChild(t);
       // Increased timeout for errors so user can read them
-      const duration = type === "error" ? 6000 : 3000;
+      const duration = type === "error" ? 8000 : 3000;
       
       setTimeout(() => { 
         t.style.opacity = "0"; 
@@ -1077,7 +1091,7 @@
         
         if (data.error) {
            // Pass the specific error from Google to the catch block
-           throw new Error(data.error.message || "API Error");
+           throw new Error(data.error.message || JSON.stringify(data.error));
         }
 
         if(data.predictions && data.predictions[0]) {
@@ -1097,17 +1111,18 @@
         
         let msg = "Generation failed.";
         
-        // Intelligent Error Parsing
+        // Intelligent Error Parsing with Detailed Output
         if (e.message) {
-            if (e.message.includes("403") || e.message.includes("referrer")) {
-                msg = "Key Error: Check Google Console Website Restrictions (Did you forget the wildcards? e.g. .io/*)";
-            } else if (e.message.includes("400") || e.message.includes("API key")) {
-                msg = "Invalid API Key or Bad Request.";
+            // Check for known Google Cloud permission errors
+            if (e.message.includes("PERMISSION_DENIED") || e.message.includes("403")) {
+                msg = `⛔ API PERMISSION DENIED: ${e.message}`;
+            } else if (e.message.includes("INVALID_ARGUMENT") || e.message.includes("400")) {
+                msg = `⛔ BAD REQUEST: ${e.message}`;
             } else if (e.message.includes("Failed to fetch")) {
-                msg = "Network Blocked. (Are you using an AdBlocker or strict Firewall?)";
+                msg = "Network Blocked. (AdBlocker/Firewall?)";
             } else {
-                // Show the raw Google message which is usually helpful
-                msg = `API Error: ${e.message}`; 
+                // Show raw error for debugging
+                msg = `Error: ${e.message.substring(0, 100)}...`; 
             }
         }
         
